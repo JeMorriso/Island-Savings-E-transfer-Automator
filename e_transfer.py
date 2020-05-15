@@ -127,7 +127,11 @@ if __name__ == "__main__":
 
         # check if they have autotransfer enabled
         try:
-            autotransfer_span = driver.find_element_by_class_name("acknowledgeText")
+            # wait up to 2 seconds for autotransfer box to appear
+            autotransfer_span = WebDriverWait(driver, 2).until(
+                EC.presence_of_element_located(
+                    (By.CLASS_NAME, "acknowledgeText"))
+            )
             autotransfer_span.click()
 
             # autotransfer_checkbox = driver.find_element_by_class_name("acknowledgeCheckbox")
