@@ -1,4 +1,4 @@
-from selenium.common.exceptions import UnexpectedAlertPresentException, NoSuchElementException
+from selenium.common.exceptions import UnexpectedAlertPresentException, NoSuchElementException, TimeoutException
 from selenium import webdriver
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
@@ -14,6 +14,13 @@ cancel_for_testing = True
 
 
 def find_user_email(email):
+    # figure out if it's an email or a phone number
+    is_email = True if '@' in email else False
+
+    # if it's a phone number, search for number with dashes
+    phone_number = f"{email[:3]}-{email[3:6]}-{email[6:]}"
+    email = phone_number
+
     # check if in email list already - Transfer To
     select = driver.find_element_by_name("components:certapaySendTransfer:Recipient:componentMarkup:select")
     for option in select.find_elements_by_tag_name('option'):
@@ -138,7 +145,7 @@ if __name__ == "__main__":
             # # on linux clicking on span does not work sometimes
             # if not autotransfer_checkbox.is_selected():
             #     autotransfer_checkbox.click()
-        except NoSuchElementException:
+        except (NoSuchElementException, TimeoutException):
             pass
 
         # Transfer from
