@@ -12,6 +12,7 @@ import time
 
 cancel_for_testing = False
 
+
 def find_user_email(email):
     # check if in email list already - Transfer To
     select = driver.find_element_by_name("components:certapaySendTransfer:Recipient:componentMarkup:select")
@@ -20,35 +21,6 @@ def find_user_email(email):
             option.click()
             return True
     return False
-
-# def confirm_receipt(prev_windows_count):
-#     receipt = driver.find_element_by_css_selector("a[title='Print Receipt']")
-#     receipt.click()
-#
-#     time.sleep(2)
-#
-#     WebDriverWait(driver, 1800).until(
-#         EC.number_of_windows_to_be(prev_windows_count)
-#     )
-#
-#     x = driver.execute_script("""
-#         const confirmPromise = new Promise((resolve, reject) => {
-#             result = confirm('Click OK when you are ready to continue');
-#             resolve(result);
-#         });
-#         confirmPromise.then((result) => {
-#             console.log(result);
-#             return result;
-#         }).catch(rejection => {
-#             console.log("REJECTED!");
-#         });
-#     """)
-#     time.sleep(2)
-#     WebDriverWait(driver, 1800).until(
-#         not EC.alert_is_present()
-#     )
-#     print(x)
-#     return x
 
 
 if __name__ == "__main__":
@@ -64,11 +36,6 @@ if __name__ == "__main__":
             emails.append(email.strip())
     # remove any duplicates
     emails = list(set(emails))
-
-    # chrome_options = Options()
-    # disable popup print dialog so we can use Robot to save PDF
-    # chrome_options.add_argument("--disable-print-preview")
-    # driver = webdriver.Chrome(options=chrome_options)
 
     driver = webdriver.Chrome()
 
@@ -117,13 +84,6 @@ if __name__ == "__main__":
     etransfer.click()
 
     for email in emails:
-        # # check if in email list already - Transfer To
-        # select = driver.find_element_by_id("id1")
-        # for option in select.find_elements_by_tag_name('option'):
-        #     if email in option.text:
-        #         option.click()
-        #         break
-
         if not find_user_email(email):
             new = driver.find_element_by_css_selector("a[title='Add a new recipient'")
             new.click()
@@ -202,68 +162,11 @@ if __name__ == "__main__":
                 EC.number_of_windows_to_be(prev_windows_count)
             )
 
-            # while not confirm_receipt(prev_windows_count):
-            #     continue
-            # receipt = driver.find_element_by_css_selector("a[title='Print Receipt']")
-            # receipt.click()
-            #
-            # time.sleep(2)
-            #
-            # WebDriverWait(driver, 1800).until(
-            #     EC.number_of_windows_to_be(prev_windows_count)
-            # )
-            #
-            # return_val = driver.execute_script("""
-            #     return (confirm('Click OK when you are ready to continue'))
-            # """)
-            # if return_val == "false":
-            #
-            #
-            # time.sleep(1)
-
-            # difficulties automating print window
-            # print_window = driver.window_handles[-1]
-            # driver.switch_to.window(print_window)
-            # print_preview_app = driver.find_element_by_xpath("//print-preview-app")
-            # print_preview_app = driver.find_element_by_xpath("//print-preview-app")
-            # content = WebElement(driver.execute_script("return arguments[0].shadowRoot", print_preview_app))
-            # preview_header = content.find_element_by_css_selector("print-preview-header")
-            # header_content = WebElement(driver.execute_script("return arguments[0].shadowRoot", preview_header))
-            # save = header_content.find_element_by_class_name("action-button")
-            # save.click()
-
         else:
             cancel = driver.find_element_by_css_selector("a[title='Cancel'")
             cancel.click()
-
 
         # wait for up to 30 minutes for user to save PDF and click on e-transfer again
         etransfer_page = WebDriverWait(driver, 1800).until(
             EC.presence_of_element_located((By.NAME, "components:certapaySendTransfer:Recipient:componentMarkup:select"))
         )
-        # try:
-        #     # wait for user to confirm PDF save
-        #     driver.execute_script("alert('Click OK when you are ready to continue');")
-        # except UnexpectedAlertPresentException:
-        #     print("error")
-        #
-        # time.sleep(30)
-        # etransfer.click()
-
-        # chrome://print is outside the scope of selenium
-        # save_receipt = driver.find_element_by_class_name("action-button")
-        # save_receipt.click()
-
-        # time.sleep(5)
-        # pyautogui.press('enter')
-
-        # automating GUI is a bit trickier - rely on user input for now
-
-
-
-
-
-
-
-
-
