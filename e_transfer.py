@@ -10,7 +10,7 @@ import pyautogui
 import json
 import time
 
-cancel_for_testing = False
+cancel_for_testing = True
 
 
 def find_user_email(email):
@@ -127,8 +127,13 @@ if __name__ == "__main__":
 
         # check if they have autotransfer enabled
         try:
-            autotransfer_checkbox = driver.find_element_by_class_name("acknowledgeCheckbox")
-            autotransfer_checkbox.click()
+            autotransfer_span = driver.find_element_by_class_name("acknowledgeText")
+            autotransfer_span.click()
+
+            # autotransfer_checkbox = driver.find_element_by_class_name("acknowledgeCheckbox")
+            # # on linux clicking on span does not work sometimes
+            # if not autotransfer_checkbox.is_selected():
+            #     autotransfer_checkbox.click()
         except NoSuchElementException:
             pass
 
