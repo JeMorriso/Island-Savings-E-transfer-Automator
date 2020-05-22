@@ -5,29 +5,77 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-import pyautogui
 
-import json
-import time
+import json, time, select, sys
+from collections import OrderedDict
 
 cancel_for_testing = True
 
 
-def find_user_email(email):
-    # figure out if it's an email or a phone number
-    is_email = True if '@' in email else False
-
-    # if it's a phone number, search for number with dashes
-    phone_number = f"{email[:3]}-{email[3:6]}-{email[6:]}"
-    email = phone_number
-
-    # check if in email list already - Transfer To
-    select = driver.find_element_by_name("components:certapaySendTransfer:Recipient:componentMarkup:select")
+# given a select from driver query, iterate over options until desired option is found
+def _select_option(select, target):
     for option in select.find_elements_by_tag_name('option'):
-        if email in option.text:
+        if target in option.text:
             option.click()
             return True
     return False
+
+
+# def _handle_error_message(driver_func, error_target):
+#     try:
+#         error = driver_func(error_target)
+#         # error found
+#         print(f"error message: ")
+#
+#         return False
+#     # no error message present
+#     except NoSuchElementException:
+#         pass
+
+
+def clean_cell(number, raw=False):
+    # accept different formats of phone number
+    number = number.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+    # turn it into Island Savings desired format
+    if not raw:
+        number = f"({number[:3]}) {number[3:6]}-{number[6:]}"
+
+    return number
+
+# name is user-provided in case of name already present error
+def try_add_recipient(contact, name=None):
+    print(f"{contact} not present in select list - adding...")
+    new = driver.find_element_by_css_selector("a[title='Add a new recipient'")
+    new.click()
+
+    if not name:
+        name = contact[:contact.find('@')] if '@' in contact else clean_cell(contact, raw=True)
+        contact_input = (
+            driver.find_element_by_name(
+                "components:RecipientEditPanel:Email:componentMarkup:textfield"
+            ) if '@' in contact
+            else driver.find_element_by_name(
+                "components:RecipientEditPanel:MobilePhone:componentMarkup:textfield"
+            )
+        )
+    contact_input.send_keys(contact)
+    name_input = driver.find_element_by_name("components:RecipientEditPanel:Name:componentMarkup:textfield")
+    name_input.send_keys(name)
+
+    select = driver.find_element_by_name(
+        "components:RecipientEditPanel:NotificationIndicator:componentMarkup:select")
+    choice = "Email" if is_email else "Mobile phone"
+    _select_option(select, choice)
+
+    question = driver.find_element_by_name(
+        "components:RecipientEditPanel:securityPanel:SecurityQ:componentMarkup:textfield")
+    question.send_keys(transfer_data['security_question'])
+    answer = driver.find_element_by_name(
+        "components:RecipientEditPanel:securityPanel:Answer:componentMarkup:textfield")
+    answer.send_keys(transfer_data['security_answer'])
+
+    add = driver.find_element_by_css_selector("input[title='Add Recipient']")
+    add.click()
 
 
 if __name__ == "__main__":
@@ -37,12 +85,14 @@ if __name__ == "__main__":
     with open("transfer_data.json", "r") as f:
         transfer_data = json.load(f)
 
-    emails = []
-    with open("emails.txt", "r") as f:
-        for email in f.readlines():
-            emails.append(email.strip())
+    contacts = []
+    with open("contacts.txt", "r") as f:
+        for contact in f.readlines():
+            # ignore blank lines
+            if contact.strip():
+                contacts.append(contact.strip())
     # remove any duplicates
-    emails = list(set(emails))
+    contacts = list(OrderedDict.fromkeys(contacts))
 
     driver = webdriver.Chrome()
 
@@ -90,99 +140,118 @@ if __name__ == "__main__":
     etransfer = driver.find_element_by_css_selector("a[href='/OnlineBanking/Transfers/EmailMoney/'")
     etransfer.click()
 
-    for email in emails:
-        if not find_user_email(email):
-            new = driver.find_element_by_css_selector("a[title='Add a new recipient'")
-            new.click()
+    for contact in contacts:
+        # figure out if it's an email or a phone number
+        is_email = True if '@' in contact else False
 
-            # figure out if it's an email or a phone number
-            is_email = True if '@' in email else False
-            if is_email:
-                name = email[:email.find('@')]
+        # if it's a phone number, search for number with dashes
+        if not is_email:
+            contact = clean_cell(contact)
 
-                # id's are changing each page load
-                email_phone_input = driver.find_element_by_name("components:RecipientEditPanel:Email:componentMarkup:textfield")
-            else:
-                name = email
+        if not _select_option(driver.find_element_by_name("components:certapaySendTransfer:Recipient:componentMarkup:select"), contact):
+            try_add_recipient(contact)
 
-                email_phone_input = driver.find_element_by_name("components:RecipientEditPanel:MobilePhone:componentMarkup:textfield")
+            # check for bad input error
+            try:
+                errors = driver.find_element_by_class_name("errors")
+                error_list = errors.find_element_by_tag_name("ol")
+                print(f"{contact} cannot be added! Errors discovered:")
+                for error in error_list.find_elements_by_tag_name("li"):
+                    print(error.find_element_by_tag_name("span").text)
 
-            email_phone_input.send_keys(email)
-            name_input = driver.find_element_by_name("components:RecipientEditPanel:Name:componentMarkup:textfield")
-            name_input.send_keys(name)
+                # go back to e-transfer page
+                etransfer = driver.find_element_by_css_selector("a[href='/OnlineBanking/Transfers/EmailMoney/'")
+                etransfer.click()
 
-            select = driver.find_element_by_name("components:RecipientEditPanel:NotificationIndicator:componentMarkup:select")
-            choice = "Email" if is_email else "Mobile phone"
-            for option in select.find_elements_by_tag_name('option'):
-                if choice in option.text:
-                    option.click()
-                    break
+            # no input error
+            except NoSuchElementException:
+                pass
 
-            question = driver.find_element_by_name("components:RecipientEditPanel:securityPanel:SecurityQ:componentMarkup:textfield")
-            question.send_keys(transfer_data['security_question'])
-            answer = driver.find_element_by_name("components:RecipientEditPanel:securityPanel:Answer:componentMarkup:textfield")
-            answer.send_keys(transfer_data['security_answer'])
+                confirm = driver.find_element_by_css_selector("input[title='Confirm']")
+                confirm.click()
 
-            add = driver.find_element_by_css_selector("input[title='Add Recipient']")
-            add.click()
+                # check for any errors
+                try:
+                    errors = driver.find_element_by_class_name("errors")
+                    error_message = errors.find_element_by_tag_name("p").text
+                    if '431' in error_message:
+                        name = contact[:contact.find('@')] if '@' in contact else clean_cell(contact, raw=True)
+                        print(f"{name} already exists as a name in the list. Skipping {contact}")
+                        # print("Choose another name and press enter:")
+                        # i, o, e = select.select([sys.stdin], [], [], 10)
+                        #
+                        # if i:
+                        #     name = i
+                        #     try_add_recipient(contact, name)
+                        # else:
+                        #     print(f"Timed out waiting for input. Skipping {contact}")
+                    else:
+                        print(f"Error occured. Skipping {contact}.")
+                        print(f"Error message: {error_message}")
 
-            confirm = driver.find_element_by_css_selector("input[title='Confirm']")
-            confirm.click()
+                    # some error occurred, so go back to e-transfer page
+                    etransfer = driver.find_element_by_css_selector("a[href='/OnlineBanking/Transfers/EmailMoney/'")
+                    etransfer.click()
+
+                except NoSuchElementException:
+                    pass
+        else:
+            print(f"{contact} already present in select list")
 
             # select the new user
-            find_user_email(email)
-
-        # check if they have autotransfer enabled
-        try:
-            # wait up to 2 seconds for autotransfer box to appear
-            autotransfer_span = WebDriverWait(driver, 2).until(
-                EC.presence_of_element_located(
-                    (By.CLASS_NAME, "acknowledgeText"))
-            )
-            autotransfer_span.click()
-
-            # autotransfer_checkbox = driver.find_element_by_class_name("acknowledgeCheckbox")
-            # # on linux clicking on span does not work sometimes
-            # if not autotransfer_checkbox.is_selected():
-            #     autotransfer_checkbox.click()
-        except (NoSuchElementException, TimeoutException):
-            pass
-
-        # Transfer from
-        select = driver.find_element_by_name("components:certapaySendTransfer:fromAcct:componentMarkup:select")
-        for i, option in enumerate(select.find_elements_by_tag_name('option')):
-            if i == 1:
-                option.click()
-                break
-
-        # now send the transfer!
-        amount = driver.find_element_by_name("components:certapaySendTransfer:Amount:Amount:componentMarkup:textfield")
-        amount.send_keys(transfer_data['amount'])
-        message_box = driver.find_element_by_name("components:certapaySendTransfer:Message:componentMarkup:textarea")
-        message_box.send_keys(transfer_data['message'])
-        send_transfer = driver.find_element_by_name("buttonPanel:actions:continue")
-        send_transfer.click()
-
-        if not cancel_for_testing:
-            confirm = driver.find_element_by_css_selector("input[title='Confirm']")
-            confirm.click()
-
-            prev_windows_count = len(driver.window_handles)
-
-            receipt = driver.find_element_by_css_selector("a[title='Print Receipt']")
-            receipt.click()
-
-            time.sleep(2)
-
-            WebDriverWait(driver, 1800).until(
-                EC.number_of_windows_to_be(prev_windows_count)
-            )
-
-        else:
-            cancel = driver.find_element_by_css_selector("a[title='Cancel'")
-            cancel.click()
-
-        # wait for up to 30 minutes for user to save PDF and click on e-transfer again
-        etransfer_page = WebDriverWait(driver, 1800).until(
-            EC.presence_of_element_located((By.NAME, "components:certapaySendTransfer:Recipient:componentMarkup:select"))
-        )
+        #     find_user_email(email)
+        #
+        # # check if they have autotransfer enabled
+        # try:
+        #     # wait up to 2 seconds for autotransfer box to appear
+        #     autotransfer_span = WebDriverWait(driver, 2).until(
+        #         EC.presence_of_element_located(
+        #             (By.CLASS_NAME, "acknowledgeText"))
+        #     )
+        #     autotransfer_span.click()
+        #
+        #     # autotransfer_checkbox = driver.find_element_by_class_name("acknowledgeCheckbox")
+        #     # # on linux clicking on span does not work sometimes
+        #     # if not autotransfer_checkbox.is_selected():
+        #     #     autotransfer_checkbox.click()
+        # except (NoSuchElementException, TimeoutException):
+        #     pass
+        #
+        # # Transfer from
+        # select = driver.find_element_by_name("components:certapaySendTransfer:fromAcct:componentMarkup:select")
+        # for i, option in enumerate(select.find_elements_by_tag_name('option')):
+        #     if i == 1:
+        #         option.click()
+        #         break
+        #
+        # # now send the transfer!
+        # amount = driver.find_element_by_name("components:certapaySendTransfer:Amount:Amount:componentMarkup:textfield")
+        # amount.send_keys(transfer_data['amount'])
+        # message_box = driver.find_element_by_name("components:certapaySendTransfer:Message:componentMarkup:textarea")
+        # message_box.send_keys(transfer_data['message'])
+        # send_transfer = driver.find_element_by_name("buttonPanel:actions:continue")
+        # send_transfer.click()
+        #
+        # if not cancel_for_testing:
+        #     confirm = driver.find_element_by_css_selector("input[title='Confirm']")
+        #     confirm.click()
+        #
+        #     prev_windows_count = len(driver.window_handles)
+        #
+        #     receipt = driver.find_element_by_css_selector("a[title='Print Receipt']")
+        #     receipt.click()
+        #
+        #     time.sleep(2)
+        #
+        #     WebDriverWait(driver, 1800).until(
+        #         EC.number_of_windows_to_be(prev_windows_count)
+        #     )
+        #
+        # else:
+        #     cancel = driver.find_element_by_css_selector("a[title='Cancel'")
+        #     cancel.click()
+        #
+        # # wait for up to 30 minutes for user to save PDF and click on e-transfer again
+        # etransfer_page = WebDriverWait(driver, 1800).until(
+        #     EC.presence_of_element_located((By.NAME, "components:certapaySendTransfer:Recipient:componentMarkup:select"))
+        # )
