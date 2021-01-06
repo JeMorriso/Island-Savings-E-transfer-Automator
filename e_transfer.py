@@ -12,7 +12,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
-# import json, time, select, sys
 import json
 import time
 from collections import OrderedDict
@@ -49,15 +48,15 @@ def try_add_recipient(transfer_data, contact, is_email, name=None):
             if "@" in contact
             else clean_cell(contact, raw=True)
         )
-        contact_input = (
-            driver.find_element_by_name(
-                "components:RecipientEditPanel:Email:componentMarkup:textfield"
-            )
-            if "@" in contact
-            else driver.find_element_by_name(
-                "components:RecipientEditPanel:MobilePhone:componentMarkup:textfield"
-            )
+    contact_input = (
+        driver.find_element_by_name(
+            "components:RecipientEditPanel:Email:componentMarkup:textfield"
         )
+        if "@" in contact
+        else driver.find_element_by_name(
+            "components:RecipientEditPanel:MobilePhone:componentMarkup:textfield"
+        )
+    )
     contact_input.send_keys(contact)
     name_input = driver.find_element_by_name(
         "components:RecipientEditPanel:Name:componentMarkup:textfield"
@@ -82,6 +81,47 @@ def try_add_recipient(transfer_data, contact, is_email, name=None):
     add = driver.find_element_by_css_selector("input[title='Add Recipient']")
     add.click()
 
+    # Check for bad input error - if there is no error, an exception is raised, and the program continues normally.
+    try:
+        # Raises NoSuchElementException.
+        errors = driver.find_element_by_class_name("errors")
+        error_list = errors.find_element_by_tag_name("ol")
+        print(f"{contact} cannot be added! Errors discovered:")
+        for error in error_list.find_elements_by_tag_name("li"):
+            print(error.find_element_by_tag_name("span").text)
+
+        driver.get(
+            "https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/"
+        )
+    except NoSuchElementException:
+        confirm = driver.find_element_by_css_selector("input[title='Confirm']")
+        confirm.click()
+
+        # Check for any errors - again, program continues normally when there is an exception.
+        try:
+            # raises NoSuchElementException
+            errors = driver.find_element_by_class_name("errors")
+            error_message = errors.find_element_by_tag_name("p").text
+            if "431" in error_message:
+                name = (
+                    contact[: contact.find("@")]
+                    if "@" in contact
+                    else clean_cell(contact, raw=True)
+                )
+                print(
+                    f"{name} already exists as a name in the list. Skipping {contact}"
+                )
+            else:
+                print(f"Error occured. Skipping {contact}.")
+                print(f"Error message: {error_message}")
+
+            driver.get(
+                "https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/"
+            )
+
+        except NoSuchElementException:
+            return
+
 
 def add_new_contacts(transfer_data, contacts):
     for contact in contacts:
@@ -92,68 +132,21 @@ def add_new_contacts(transfer_data, contacts):
         if not is_email:
             contact = clean_cell(contact)
 
-        if not _select_option(
-            driver.find_element_by_name(
-                "components:certapaySendTransfer:Recipient:componentMarkup:select"
-            ),
-            contact,
-        ):
+        try:
+            # Raises NoSuchElementException.
+            if not _select_option(
+                driver.find_element_by_name(
+                    "components:certapaySendTransfer:Recipient:componentMarkup:select"
+                ),
+                contact,
+            ):
+                try_add_recipient(transfer_data, contact, is_email)
+            else:
+                print(f"{contact} already present in select list")
+
+        except NoSuchElementException:
+            # If there are currently no contacts, then the recipient select will not be present.
             try_add_recipient(transfer_data, contact, is_email)
-
-            # Check for bad input error - if there is no error, an exception is raised, and the program continues normally.
-            try:
-                # raises NoSuchElementException
-                errors = driver.find_element_by_class_name("errors")
-                error_list = errors.find_element_by_tag_name("ol")
-                print(f"{contact} cannot be added! Errors discovered:")
-                for error in error_list.find_elements_by_tag_name("li"):
-                    print(error.find_element_by_tag_name("span").text)
-
-                # go back to e-transfer page
-                # etransfer = driver.find_element_by_css_selector("a[href='/OnlineBanking/Transfers/EmailMoney/'")
-                # etransfer.click()
-                # go back to e-transfer page
-                driver.get(
-                    "https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/"
-                )
-
-            # no input error
-            except NoSuchElementException:
-                pass
-
-                confirm = driver.find_element_by_css_selector("input[title='Confirm']")
-                confirm.click()
-
-                # check for any errors - again, program continues normally when there is an exception.
-                try:
-                    # raises NoSuchElementException
-                    errors = driver.find_element_by_class_name("errors")
-                    error_message = errors.find_element_by_tag_name("p").text
-                    if "431" in error_message:
-                        name = (
-                            contact[: contact.find("@")]
-                            if "@" in contact
-                            else clean_cell(contact, raw=True)
-                        )
-                        print(
-                            f"{name} already exists as a name in the list. Skipping {contact}"
-                        )
-                    else:
-                        print(f"Error occured. Skipping {contact}.")
-                        print(f"Error message: {error_message}")
-
-                    # some error occurred, so go back to e-transfer page
-                    # etransfer = driver.find_element_by_css_selector("a[href='/OnlineBanking/Transfers/EmailMoney/'")
-                    # etransfer.click()
-                    # some error occurred, so go back to e-transfer page
-                    driver.get(
-                        "https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/"
-                    )
-
-                except NoSuchElementException:
-                    pass
-        else:
-            print(f"{contact} already present in select list")
 
 
 def try_answer_security_questions(member_data):
@@ -203,7 +196,6 @@ def login(member_data):
 
 
 def try_send_transfer(transfer_data, contact):
-
     # select the new user
     _select_option(
         driver.find_element_by_name(
@@ -211,8 +203,6 @@ def try_send_transfer(transfer_data, contact):
         ),
         contact,
     )
-
-    # find_user_email(email)
 
     # check if they have autotransfer enabled
     try:
@@ -272,8 +262,6 @@ def try_send_transfer(transfer_data, contact):
         driver.get(
             "https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/"
         )
-        # cancel = driver.find_element_by_css_selector("a[title='Cancel'")
-        # cancel.click()
 
     # TODO
     # wait for up to 30 minutes for user to save PDF and click on e-transfer again
@@ -300,139 +288,20 @@ def main():
         transfer_data = json.load(f)
 
     contacts = []
-    with open("contacts.txt", "r") as f:
+    with open("contacts2.txt", "r") as f:
         # ignore blank lines
         contacts = [line.strip() for line in f.readlines() if line.strip()]
     # remove any duplicates
     contacts = list(OrderedDict.fromkeys(contacts))
 
     login(member_data)
-    # begin
-    # driver.get("https://online.islandsavings.ca/OnlineBanking/")
-    # el = driver.find_element_by_id("branch")
-    # for option in el.find_elements_by_tag_name("option"):
-    #     if option.text == member_data["branch"]:
-    #         option.click()
-
-    # el = driver.find_element_by_id("acctnum")
-    # el.clear()
-    # el.send_keys(member_data["member_number"])
-
-    # el = driver.find_element_by_id("pac")
-    # el.clear()
-    # el.send_keys(member_data["password"])
-
-    # el = driver.find_element_by_id("Continue")
-    # el.click()
-
-    # # check if logon triggered security question
-    # try:
-    #     el = driver.find_element_by_class_name("mdIALogonChallenge")
-
-    #     if "security_questions" in member_data:
-    #         el = driver.find_element_by_css_selector("label[for='answer']")
-    #         security_q = el.text
-    #         security_input = driver.find_element_by_id("answer")
-    #         for q_and_a in member_data["security_questions"].values():
-    #             if q_and_a["q"] in security_q:
-    #                 security_input.send_keys(q_and_a["a"])
-    #                 el = driver.find_element_by_id("Continue")
-    #                 el.click()
-
-    # except NoSuchElementException:
-    #     print("Bypassed security questions...")
-
-    # wait for up to 30 minutes for user to enter security question
-    # transfers = WebDriverWait(driver, 1800).until(
-    #     EC.presence_of_element_located((By.CSS_SELECTOR, "a[title='Transfers']"))
-    # )
-    # transfers.click()
-
     try_answer_security_questions(member_data)
-
-    # Wait up to 30 minutes for security questions to be answered
-    # WebDriverWait(driver, 1800).until(
-    #     EC.presence_of_element_located((By.CSS_SELECTOR, "a[title='Transfers']"))
-    # )
-
-    # etransfer = driver.find_element_by_css_selector("a[href='/OnlineBanking/Transfers/EmailMoney/'")
-    # etransfer.click()
 
     # Once we're in we can just use the URL directly.
     driver.get("https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/")
 
     add_new_contacts(transfer_data, contacts)
     send_transfers(transfer_data, contacts)
-    # for contact in contacts:
-    #     # figure out if it's an email or a phone number
-    #     is_email = True if "@" in contact else False
-
-    #     # If it's a phone number, make sure it's in Island Savings format.
-    #     if not is_email:
-    #         contact = clean_cell(contact)
-
-    #     if not _select_option(
-    #         driver.find_element_by_name(
-    #             "components:certapaySendTransfer:Recipient:componentMarkup:select"
-    #         ),
-    #         contact,
-    #     ):
-    #         try_add_recipient(contact)
-
-    #         # Check for bad input error - if there is no error, an exception is raised, and the program continues normally.
-    #         try:
-    #             # raises NoSuchElementException
-    #             errors = driver.find_element_by_class_name("errors")
-    #             error_list = errors.find_element_by_tag_name("ol")
-    #             print(f"{contact} cannot be added! Errors discovered:")
-    #             for error in error_list.find_elements_by_tag_name("li"):
-    #                 print(error.find_element_by_tag_name("span").text)
-
-    #             # go back to e-transfer page
-    #             # etransfer = driver.find_element_by_css_selector("a[href='/OnlineBanking/Transfers/EmailMoney/'")
-    #             # etransfer.click()
-    #             # go back to e-transfer page
-    #             driver.get(
-    #                 "https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/"
-    #             )
-
-    #         # no input error
-    #         except NoSuchElementException:
-    #             pass
-
-    #             confirm = driver.find_element_by_css_selector("input[title='Confirm']")
-    #             confirm.click()
-
-    #             # check for any errors - again, program continues normally when there is an exception.
-    #             try:
-    #                 # raises NoSuchElementException
-    #                 errors = driver.find_element_by_class_name("errors")
-    #                 error_message = errors.find_element_by_tag_name("p").text
-    #                 if "431" in error_message:
-    #                     name = (
-    #                         contact[: contact.find("@")]
-    #                         if "@" in contact
-    #                         else clean_cell(contact, raw=True)
-    #                     )
-    #                     print(
-    #                         f"{name} already exists as a name in the list. Skipping {contact}"
-    #                     )
-    #                 else:
-    #                     print(f"Error occured. Skipping {contact}.")
-    #                     print(f"Error message: {error_message}")
-
-    #                 # some error occurred, so go back to e-transfer page
-    #                 # etransfer = driver.find_element_by_css_selector("a[href='/OnlineBanking/Transfers/EmailMoney/'")
-    #                 # etransfer.click()
-    #                 # some error occurred, so go back to e-transfer page
-    #                 driver.get(
-    #                     "https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/"
-    #                 )
-
-    #             except NoSuchElementException:
-    #                 pass
-    #     else:
-    #         print(f"{contact} already present in select list")
 
 
 if __name__ == "__main__":
@@ -442,140 +311,3 @@ if __name__ == "__main__":
     driver = webdriver.Chrome()
 
     main()
-    # with open("member_data.json", "r") as f:
-    #     member_data = json.load(f)
-
-    # with open("transfer_data.json", "r") as f:
-    #     transfer_data = json.load(f)
-
-    # contacts = []
-    # with open("contacts.txt", "r") as f:
-    #     # for contact in f.readlines():
-    #     #     # ignore blank lines
-    #     #     if contact.strip():
-    #     #         contacts.append(contact.strip())
-
-    #     # ignore blank lines
-    #     contacts = [line.strip() for line in f.readlines() if line.strip()]
-    # # remove any duplicates
-    # contacts = list(OrderedDict.fromkeys(contacts))
-
-    # driver = webdriver.Chrome()
-
-    # # begin
-    # driver.get("https://online.islandsavings.ca/OnlineBanking/")
-    # el = driver.find_element_by_id("branch")
-    # for option in el.find_elements_by_tag_name("option"):
-    #     if option.text == member_data["branch"]:
-    #         option.click()
-
-    # el = driver.find_element_by_id("acctnum")
-    # el.clear()
-    # el.send_keys(member_data["member_number"])
-
-    # el = driver.find_element_by_id("pac")
-    # el.clear()
-    # el.send_keys(member_data["password"])
-
-    # el = driver.find_element_by_id("Continue")
-    # el.click()
-
-    # # check if logon triggered security question
-    # try:
-    #     el = driver.find_element_by_class_name("mdIALogonChallenge")
-
-    #     if "security_questions" in member_data:
-    #         el = driver.find_element_by_css_selector("label[for='answer']")
-    #         security_q = el.text
-    #         security_input = driver.find_element_by_id("answer")
-    #         for q_and_a in member_data["security_questions"].values():
-    #             if q_and_a["q"] in security_q:
-    #                 security_input.send_keys(q_and_a["a"])
-    #                 el = driver.find_element_by_id("Continue")
-    #                 el.click()
-
-    # except Exception as e:
-    #     print("Bypassed security questions...")
-
-    # # wait for up to 30 minutes for user to enter security question
-    # transfers = WebDriverWait(driver, 1800).until(
-    #     EC.presence_of_element_located((By.CSS_SELECTOR, "a[title='Transfers']"))
-    # )
-    # # transfers.click()
-
-    # # etransfer = driver.find_element_by_css_selector("a[href='/OnlineBanking/Transfers/EmailMoney/'")
-    # # etransfer.click()
-
-    # # Once we're in we can just use the URL directly.
-    # driver.get("https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/")
-
-    # for contact in contacts:
-    #     # figure out if it's an email or a phone number
-    #     is_email = True if "@" in contact else False
-
-    #     # If it's a phone number, make sure it's in Island Savings format.
-    #     if not is_email:
-    #         contact = clean_cell(contact)
-
-    #     if not _select_option(
-    #         driver.find_element_by_name(
-    #             "components:certapaySendTransfer:Recipient:componentMarkup:select"
-    #         ),
-    #         contact,
-    #     ):
-    #         try_add_recipient(contact)
-
-    #         # Check for bad input error - if there is no error, an exception is raised, and the program continues normally.
-    #         try:
-    #             # raises NoSuchElementException
-    #             errors = driver.find_element_by_class_name("errors")
-    #             error_list = errors.find_element_by_tag_name("ol")
-    #             print(f"{contact} cannot be added! Errors discovered:")
-    #             for error in error_list.find_elements_by_tag_name("li"):
-    #                 print(error.find_element_by_tag_name("span").text)
-
-    #             # go back to e-transfer page
-    #             # etransfer = driver.find_element_by_css_selector("a[href='/OnlineBanking/Transfers/EmailMoney/'")
-    #             # etransfer.click()
-    #             # go back to e-transfer page
-    #             driver.get(
-    #                 "https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/"
-    #             )
-
-    #         # no input error
-    #         except NoSuchElementException:
-    #             pass
-
-    #             confirm = driver.find_element_by_css_selector("input[title='Confirm']")
-    #             confirm.click()
-
-    #             # check for any errors - again, program continues normally when there is an exception.
-    #             try:
-    #                 # raises NoSuchElementException
-    #                 errors = driver.find_element_by_class_name("errors")
-    #                 error_message = errors.find_element_by_tag_name("p").text
-    #                 if "431" in error_message:
-    #                     name = (
-    #                         contact[: contact.find("@")]
-    #                         if "@" in contact
-    #                         else clean_cell(contact, raw=True)
-    #                     )
-    #                     print(
-    #                         f"{name} already exists as a name in the list. Skipping {contact}"
-    #                     )
-    #                 else:
-    #                     print(f"Error occured. Skipping {contact}.")
-    #                     print(f"Error message: {error_message}")
-
-    #                 # some error occurred, so go back to e-transfer page
-    #                 # etransfer = driver.find_element_by_css_selector("a[href='/OnlineBanking/Transfers/EmailMoney/'")
-    #                 # etransfer.click()
-    #                 # some error occurred, so go back to e-transfer page
-    #                 driver.get(
-    #                     "https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/"
-    #                 )
-
-    #             except NoSuchElementException:
-    #                 pass
-    #     else:
-    #         print(f"{contact} already present in select list")
