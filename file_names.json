@@ -1,0 +1,5 @@
+{
+  "add_file": "contacts-to-add.txt",
+  "send_file": "contacts-to-send-transfers-to.txt",
+  "delete_file": "contacts-to-delete.txt"
+}

@@ -1,0 +1,10 @@
+{
+  "branch": "Your Island Savings branch, as found in the dropdown menu when you login",
+  "member_number": "Your member number",
+  "password": "Your password",
+  "security_questions": {
+    "q1": { "q": "One of your security questions", "a": "Its answer" },
+    "q2": { "q": "q2", "a": "a2" },
+    "q3": { "q": "q3", "a": "a3" }
+  }
+}

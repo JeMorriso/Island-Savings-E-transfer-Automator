@@ -1,0 +1,6 @@
+{
+  "security_question": "Security question that the recipient must answer",
+  "security_answer": "The answer to the question",
+  "amount": "Amount (in dollars) of the transfer",
+  "message": "Optional message for the recipient"
+}
