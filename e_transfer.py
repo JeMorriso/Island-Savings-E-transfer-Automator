@@ -11,6 +11,13 @@ import argparse
 
 # given a select from driver query, iterate over options until desired option is found
 def _select_option(select, target):
+    """Iterate over select elements until target is found.
+
+    Select the target option in the browser if found.
+
+    Return:
+        bool: Whether or not the target was found.
+    """
     for option in select.find_elements_by_tag_name("option"):
         if target in option.text:
             option.click()
@@ -52,6 +59,10 @@ def generate_contact_name(contact):
 
 
 def try_add_recipient(transfer_data, contact):
+
+    if driver.current_url != E_TRANSFER_URL:
+        driver.get(E_TRANSFER_URL)
+
     print(f"{contact} not present in select list - adding...")
     new = driver.find_element_by_css_selector("a[title='Add a new recipient']")
     new.click()
@@ -99,7 +110,9 @@ def try_add_recipient(transfer_data, contact):
         for error in error_list.find_elements_by_tag_name("li"):
             print(error.find_element_by_tag_name("span").text)
 
-        driver.get(E_TRANSFER_URL)
+        if driver.current_url != E_TRANSFER_URL:
+            driver.get(E_TRANSFER_URL)
+
     except NoSuchElementException:
         confirm = driver.find_element_by_css_selector("input[title='Confirm']")
         confirm.click()
@@ -118,7 +131,8 @@ def try_add_recipient(transfer_data, contact):
                 print(f"Error occured. Skipping {contact}.")
                 print(f"Error message: {error_message}")
 
-            driver.get(E_TRANSFER_URL)
+            if driver.current_url != E_TRANSFER_URL:
+                driver.get(E_TRANSFER_URL)
 
         except NoSuchElementException:
             return
@@ -128,7 +142,8 @@ def add_contacts(transfer_data, contacts):
     if contacts is None:
         print("No contacts list provided. Exiting.")
 
-    driver.get(E_TRANSFER_URL)
+    if driver.current_url != E_TRANSFER_URL:
+        driver.get(E_TRANSFER_URL)
 
     for contact in contacts:
         contact = sanitize_contact(contact)
@@ -280,21 +295,32 @@ def login(member_data):
 
 
 def try_send_transfer(transfer_data, contact):
+    if driver.current_url != E_TRANSFER_URL:
+        driver.get(E_TRANSFER_URL)
+
     # select the new user
-    _select_option(
+    if not _select_option(
         driver.find_element_by_name(
             "components:certapaySendTransfer:Recipient:componentMarkup:select"
         ),
         contact,
-    )
+    ):
+        print(f"Contact {contact} not found in select list. Skipping {contact}...")
+        return
 
     # check if they have autotransfer enabled
     try:
         # wait up to 2 seconds for autotransfer box to appear
-        autotransfer_span = WebDriverWait(driver, 2).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "acknowledgeText"))
+        autotransfer_div = WebDriverWait(driver, 2).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "div.acknowledgeCheckbox"))
         )
-        autotransfer_span.click()
+        autotransfer_div.click()
+        # Check that the checkbox is actually clicked - need to access the input element
+        # itself - checking the div will not work.
+        if not driver.find_element_by_css_selector(
+            "input.acknowledgeCheckbox"
+        ).is_selected():
+            print(f"Autotransfer checkbox could not be clicked. Skipping {contact}...")
 
     except (NoSuchElementException, TimeoutException):
         pass
@@ -326,16 +352,17 @@ def try_send_transfer(transfer_data, contact):
         receipt.click()
 
         # Wait for user to handle print window.
+        # I don't think this is strictly necessary, because it seems like the driver is
+        # suspended while the print window is open, but it shouldn't hurt to keep it.
         WebDriverWait(driver, 1800).until(
             EC.number_of_windows_to_be(prev_windows_count)
         )
 
-    else:
-        # Cancel, just go to transfer page.
-        driver.get(E_TRANSFER_URL)
-
 
 def send_transfers(transfer_data, contacts):
+    if contacts is None:
+        print("No contacts list provided. Exiting.")
+
     try:
         for contact in contacts:
             try_send_transfer(transfer_data, contact)
@@ -346,6 +373,7 @@ def send_transfers(transfer_data, contacts):
 
 
 def add_contacts_and_send_transfers(transfer_data, contacts):
+    """DEPRECATED"""
     add_contacts(transfer_data, contacts)
     send_transfers(transfer_data, contacts)
 
@@ -405,9 +433,9 @@ def main():
         if args.add or all(el is False for el in [args.add, args.send, args.delete]):
             contacts = process_contact_list(file_names["add_file"])
             add_contacts(transfer_data, contacts)
-        elif args.send:
+        if args.send:
             contacts = process_contact_list(file_names["send_file"])
-            add_contacts_and_send_transfers(transfer_data, contacts)
+            send_transfers(transfer_data, contacts)
         if args.delete:
             contacts = process_contact_list(file_names["delete_file"])
             delete_contacts(contacts)
@@ -418,7 +446,7 @@ def main():
 
 if __name__ == "__main__":
 
-    CANCEL_FOR_TESTING = False
+    CANCEL_FOR_TESTING = True
     HOME_URL = "https://online.islandsavings.ca/OnlineBanking/"
     E_TRANSFER_URL = (
         "https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/"
@@ -443,7 +471,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--send",
         action="store_true",
-        help="Add contacts, and send e-transfers to all contacts in list.",
+        help="Send e-transfers to all contacts in list.",
     )
 
     args = parser.parse_args()
