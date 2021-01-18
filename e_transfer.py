@@ -7,6 +7,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 import json
 from collections import OrderedDict
 import argparse
+import time
 
 
 # given a select from driver query, iterate over options until desired option is found
@@ -310,10 +311,13 @@ def try_send_transfer(transfer_data, contact):
 
     # check if they have autotransfer enabled
     try:
+        # Having problems in this section
+        time.sleep(2)
         # wait up to 2 seconds for autotransfer box to appear
         autotransfer_div = WebDriverWait(driver, 2).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "div.acknowledgeCheckbox"))
         )
+
         autotransfer_div.click()
         # Check that the checkbox is actually clicked - need to access the input element
         # itself - checking the div will not work.
