@@ -30,7 +30,15 @@ This is the default function, so `--add` may be omitted.
 
 `python e_transfer.py --send`
 
-This function first adds all the recipients in the associated text file, and then sends them all an e-transfer using the information found in `transfer_data.json`. This function requires user input after the transfer step in order to save or print the receipt. After this is done (or cancelled) the program will automatically resume execution.
+#### **Update: --send no longer adds recipients by default. It assumes the contacts are already added.**
+
+This function sends them all an e-transfer using the information found in `transfer_data.json`. This function requires user input after the transfer step in order to save or print the receipt. After this is done (or cancelled) the program will automatically resume execution.
+
+### Add and send
+
+If you want to add and send to a list of contacts, `add_file` and `send_file` in `file_names.json` should point to the same text file.
+
+`python e_transfer.py --add --send`
 
 ### Delete recipients
 
