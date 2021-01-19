@@ -450,7 +450,7 @@ def main():
 
 if __name__ == "__main__":
 
-    CANCEL_FOR_TESTING = True
+    CANCEL_FOR_TESTING = False
     HOME_URL = "https://online.islandsavings.ca/OnlineBanking/"
     E_TRANSFER_URL = (
         "https://online.islandsavings.ca/OnlineBanking/Transfers/EmailMoney/"
